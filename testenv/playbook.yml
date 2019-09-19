@@ -1,0 +1,49 @@
+---
+- hosts: all
+  connection: local
+  become: yes
+  vars:
+      app_path: /webapps/devops
+
+  tasks:
+    - name: Set time to UTC
+      timezone: name=Etc/UTC
+      become: yes
+      tags:
+       - time
+
+    - name: Install pre-requisites
+      apt: name={{ item }} state=present update_cache=true
+      with_items:
+        - python
+        - git
+        - gunicorn
+        - logrotate
+
+    - name: clone repo
+      git: >
+        repo=https://bitbucket.org/azneita/devops-challenge.git
+        dest={{ app_path }}
+ 
+    - name: Install python modules
+      pip:
+        requirements: requirements.txt
+        chdir: /webapps/devops
+
+    - name: Create a conf file for app
+      copy:
+        dest: "/etc/init/app.conf"
+        content: |
+          description "app"
+
+          start on (filesystem)
+          stop on runlevel [016]
+
+          respawn
+          setuid vagrant
+          chdir /webapps/devops
+          
+          exec gunicorn app:app --bind 0.0.0.0:5000
+
+    - name: Start application
+      service: name=app state=started
